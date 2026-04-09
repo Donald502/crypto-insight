@@ -1,0 +1,50 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+@layer base {
+  body {
+    @apply bg-black text-white antialiased;
+  }
+
+  :root {
+    --chart-price-line: #ffffff;
+    --chart-label: #64748b; /* slate-500 */
+    --chart-axis: #475569; /* slate-600 */
+  }
+
+  .light-mode {
+    --chart-price-line: #000000;
+    --chart-label: #1e293b; /* darker color for light mode */
+    --chart-axis: #334155;
+    --color-black: #f1f5f9;
+    --color-white: #0f172a;
+    --color-slate-900: #ffffff;
+    --color-slate-800: #e2e8f0;
+    --color-slate-700: #cbd5e1;
+    --color-slate-600: #94a3b8;
+    --color-slate-500: #64748b;
+    --color-slate-400: #475569;
+    --color-slate-300: #334155;
+    --color-slate-200: #1e293b;
+    
+    --color-blue-900: #3b82f6; 
+    --color-blue-600: #2563eb;
+    --color-blue-500: #2563eb;
+    --color-blue-400: #3b82f6;
+    
+    --color-green-500: #16a34a;
+    --color-green-400: #15803d;
+    
+    --color-red-500: #dc2626;
+    --color-red-400: #b91c1c;
+
+    --color-yellow-500: #eab308;
+    --color-yellow-400: #ca8a04;
+  }
+}
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap');
