@@ -39,6 +39,7 @@ const INTERVALS = [
   { label: '4시간', value: '4h' },
   { label: '1일', value: '1d' },
   { label: '3일', value: '3d' },
+  { label: '1주', value: '1w' },
 ];
 
 const SECTORS = [
@@ -96,13 +97,12 @@ export default function App() {
     const prevRankIndex = pastCoins.findIndex(c => c.id === coin.id);
     if (prevRankIndex === -1) return null;
     
-    const prevRank = prevRankIndex + 1; // 1-indexed
+    const prevRank = prevRankIndex + 1;
     if (prevRank === coin.market_cap_rank || !coin.market_cap_rank) return 0;
     
     return prevRank - coin.market_cap_rank;
   }, [coins]);
   
-  // Cache for chart data to make interval switching instant
   const chartCacheRef = useRef<Map<string, { data: OHLCData[], source: string, timestamp: number }>>(new Map());
   const isPrefetchingRef = useRef<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -111,7 +111,6 @@ export default function App() {
   const [globalError, setGlobalError] = useState(false);
   const [globalExchanges, setGlobalExchanges] = useState<GlobalExchange[]>([]);
 
-  // 1. 초기 데이터 로드 (상위 코인 및 글로벌 지표)
   const fetchInitialData = useCallback(async () => {
     if (isRefreshing && !loading) return;
     setError(null);
@@ -121,35 +120,25 @@ export default function App() {
         console.warn('Fear & Greed fetch failed:', e);
         return { data: [{ value: '50', value_classification: 'Neutral' }] };
       });
-
       const globalPromise = getGlobalData().catch(e => {
         console.warn('Global data fetch failed:', e);
         setGlobalError(true);
         return { data: null };
       });
-
       const exchangesPromise = getTopExchanges().catch(e => {
         console.warn('Exchanges fetch failed:', e);
         return [];
       });
-
       const ratePromise = getExchangeRate().catch(e => {
         console.warn('Exchange rate fetch failed:', e);
         return 1350;
       });
-
       const topCoinsPromise = getTopCoins(500);
       const liquidityPromise = getMarketLiquidityData();
       const flowsPromise = getExchangeFlows();
 
       const [fng, global, topExchanges, topCoins, rate, liquidity, flows] = await Promise.all([
-        fngPromise,
-        globalPromise,
-        exchangesPromise,
-        topCoinsPromise,
-        ratePromise,
-        liquidityPromise,
-        flowsPromise
+        fngPromise, globalPromise, exchangesPromise, topCoinsPromise, ratePromise, liquidityPromise, flowsPromise
       ]);
 
       if (fng && fng.data) setFearGreed(fng.data[0]);
@@ -160,7 +149,6 @@ export default function App() {
       setMarketLiquidity(liquidity);
       setExchangeFlows(flows);
       
-      // Fetch top 3 coins by volume derivatives (excluding stablecoins)
       const stablecoins = ['usdt', 'usdc', 'fdusd', 'dai', 'tusd', 'busd', 'ustc', 'pyusd', 'usde', 'crvusd', 'lusd', 'frax'];
       const top3ByVolume = [...topCoins]
         .filter(c => !stablecoins.includes(c.symbol.toLowerCase()) && !c.name.toLowerCase().includes('stablecoin') && !c.name.toLowerCase().includes('tether'))
@@ -178,7 +166,6 @@ export default function App() {
       
       if (!selectedCoin && topCoins.length > 0) {
         setSelectedCoin(topCoins[0]);
-        // 첫 코인 데이터 로드
         loadCoinData(topCoins[0], interval);
       }
       
@@ -190,21 +177,16 @@ export default function App() {
     }
   }, [selectedCoin, interval, loading, isRefreshing]);
 
-  // 1.5 섹션 데이터 로드 (특정 섹션 또는 초기 섹션)
   const fetchSectorData = useCallback(async (sectorId?: string) => {
     if (isFetchingSectorsRef.current) return;
     isFetchingSectorsRef.current = true;
     setLoadingSectors(true);
-    
     try {
       const sectorsToFetch = sectorId 
         ? SECTORS.filter(s => s.id === sectorId)
-        : SECTORS.slice(0, 2); // 초기에는 2개만 로드하여 부하 감소
-      
+        : SECTORS.slice(0, 2);
       for (const s of sectorsToFetch) {
-        // 이미 로드된 섹션은 건너뜀
         if (sectorDataRef.current.some(sd => sd.category === s.name)) continue;
-
         try {
           const coins = await getSectorCoins(s.id);
           if (coins && coins.length > 0) {
@@ -212,7 +194,6 @@ export default function App() {
             sectorDataRef.current = [...sectorDataRef.current, newSector];
             setSectorData([...sectorDataRef.current]);
           }
-          // CoinGecko free tier is very sensitive
           if (sectorsToFetch.length > 1) {
             await new Promise(resolve => setTimeout(resolve, 3000 + Math.random() * 2000));
           }
@@ -226,46 +207,30 @@ export default function App() {
     }
   }, []);
 
-  // 2. 특정 코인 데이터 로드 (차트, 상세 정보)
   const loadCoinData = async (coin: Coin, currentInterval: string, prefetchedDetails?: any) => {
     const cacheKey = `${coin.id}-${currentInterval}`;
     const cached = chartCacheRef.current.get(cacheKey);
-    
-    // Use cache if it's less than 1 minute old
     if (cached && Date.now() - cached.timestamp < 60000) {
       setChartData(cached.data);
       setChartSource(cached.source);
     } else {
       try {
-        // Fetch more data points to support 3 days of 15m data (3*24*60/15 = 288)
         const { data: klines, source } = await getUniversalKlines(coin.symbol, currentInterval, 300, coin.id, coin.current_price);
         setChartSource(source);
         if (klines && Array.isArray(klines) && klines.length > 0) {
           const withBB = calculateBollingerBands(klines);
           const withMACD = calculateMACD(withBB);
           setChartData(withMACD);
-          
-          // Save to cache
-          chartCacheRef.current.set(cacheKey, {
-            data: withMACD,
-            source,
-            timestamp: Date.now()
-          });
+          chartCacheRef.current.set(cacheKey, { data: withMACD, source, timestamp: Date.now() });
         } else {
           throw new Error('No klines data available from any exchange');
         }
       } catch (chartError: any) {
         console.warn('Error loading chart data from exchanges:', chartError.message);
-        if (!cached) {
-          setChartData([]);
-          setChartSource('Error');
-        }
+        if (!cached) { setChartData([]); setChartSource('Error'); }
       }
     }
-
-    // Derivatives and Details
     try {
-      // Derivatives Data (Binance, Bybit & OKX Futures)
       try {
         const [binance, bybit, okx] = await Promise.all([
           getDerivativesData(coin.symbol),
@@ -277,17 +242,11 @@ export default function App() {
         setOkxDerivatives(okx);
       } catch (derivativesError) {
         console.warn('Error loading derivatives data:', derivativesError);
-        setBinanceDerivatives(null);
-        setBybitDerivatives(null);
-        setOkxDerivatives(null);
+        setBinanceDerivatives(null); setBybitDerivatives(null); setOkxDerivatives(null);
       }
-
-      // CoinGecko data (Details)
       try {
         const details = prefetchedDetails || await getCoinDetails(coin.id);
-        if (details) {
-          updateCoinDetails(details);
-        }
+        if (details) { updateCoinDetails(details); }
       } catch (detailsError: any) {
         console.warn('Error loading coin details from CoinGecko:', detailsError.message);
       }
@@ -301,45 +260,28 @@ export default function App() {
     const topExchanges = tickers
       .sort((a: any, b: any) => b.converted_volume.usd - a.converted_volume.usd)
       .slice(0, 5)
-      .map((t: any) => ({
-        name: t.market.name,
-        volume: t.converted_volume.usd,
-        trade_url: t.trade_url
-      }));
+      .map((t: any) => ({ name: t.market.name, volume: t.converted_volume.usd, trade_url: t.trade_url }));
     setExchanges(topExchanges);
-
     const isStaking = details.categories?.some((c: string) => c.toLowerCase().includes('proof of stake')) || 
                       details.hashing_algorithm === 'Proof of Stake';
-    setStaking({
-      is_staking_available: isStaking,
-      staking_ratio: isStaking ? (Math.random() * 15 + 2) : undefined
-    });
+    setStaking({ is_staking_available: isStaking, staking_ratio: isStaking ? (Math.random() * 15 + 2) : undefined });
   };
 
-  // Prefetch other common intervals in the background
   const prefetchIntervals = useCallback(async (coin: Coin) => {
     if (isPrefetchingRef.current === coin.id) return;
     isPrefetchingRef.current = coin.id;
-
     const commonIntervals = ['15m', '1h', '1d'];
     for (const int of commonIntervals) {
-      if (int === interval) continue; // Skip current
-      
+      if (int === interval) continue;
       const cacheKey = `${coin.id}-${int}`;
       if (chartCacheRef.current.has(cacheKey)) continue;
-
       try {
         const { data: klines, source } = await getUniversalKlines(coin.symbol, int, 300, coin.id, coin.current_price);
         if (klines && klines.length > 0) {
           const withBB = calculateBollingerBands(klines);
           const withMACD = calculateMACD(withBB);
-          chartCacheRef.current.set(cacheKey, {
-            data: withMACD,
-            source,
-            timestamp: Date.now()
-          });
+          chartCacheRef.current.set(cacheKey, { data: withMACD, source, timestamp: Date.now() });
         }
-        // Small delay between prefetch requests to avoid rate limits
         await new Promise(r => setTimeout(r, 500));
       } catch (e) {
         console.warn(`Prefetch failed for ${int}:`, e);
@@ -349,36 +291,25 @@ export default function App() {
   }, [interval]);
 
   const handleSelectCoin = async (coin: any) => {
-    // 이미 상위 코인 목록에 있는지 확인
     const existingCoin = coins.find(c => c.id === coin.id);
     if (existingCoin) {
       setSelectedCoin(existingCoin);
-      chartCacheRef.current.clear(); // Clear cache for new coin
+      chartCacheRef.current.clear();
       await loadCoinData(existingCoin, interval);
       prefetchIntervals(existingCoin);
       return;
     }
-
-    // If it's a search result from the API, it might not have all fields
     if (!coin.market_cap && coin.id) {
       try {
         const details = await getCoinDetails(coin.id);
         const fullCoin: Coin = {
-          id: details.id,
-          symbol: details.symbol,
-          name: details.name,
-          image: details.image.large,
-          current_price: details.market_data.current_price.usd,
-          market_cap: details.market_data.market_cap.usd,
-          market_cap_rank: details.market_data.market_cap_rank,
-          total_volume: details.market_data.total_volume.usd,
-          high_24h: details.market_data.high_24h.usd,
-          low_24h: details.market_data.low_24h.usd,
+          id: details.id, symbol: details.symbol, name: details.name, image: details.image.large,
+          current_price: details.market_data.current_price.usd, market_cap: details.market_data.market_cap.usd,
+          market_cap_rank: details.market_data.market_cap_rank, total_volume: details.market_data.total_volume.usd,
+          high_24h: details.market_data.high_24h.usd, low_24h: details.market_data.low_24h.usd,
           price_change_percentage_24h: details.market_data.price_change_percentage_24h,
-          circulating_supply: details.market_data.circulating_supply,
-          total_supply: details.market_data.total_supply,
-          max_supply: details.market_data.max_supply,
-          ath: details.market_data.ath.usd,
+          circulating_supply: details.market_data.circulating_supply, total_supply: details.market_data.total_supply,
+          max_supply: details.market_data.max_supply, ath: details.market_data.ath.usd,
         };
         setSelectedCoin(fullCoin);
         chartCacheRef.current.clear();
@@ -395,145 +326,62 @@ export default function App() {
     }
   };
 
-  useEffect(() => {
-    fetchInitialData();
-  }, [fetchInitialData]);
+  useEffect(() => { fetchInitialData(); }, [fetchInitialData]);
+  useEffect(() => { fetchSectorData(); }, [fetchSectorData]);
+  useEffect(() => { if (selectedCoin) { loadCoinData(selectedCoin, interval); } }, [interval]);
 
-  useEffect(() => {
-    fetchSectorData();
-  }, [fetchSectorData]);
-
-  useEffect(() => {
-    if (selectedCoin) {
-      loadCoinData(selectedCoin, interval);
-    }
-  }, [interval]);
-
-  // 3. Search API Integration
   const technicalAnalysis = React.useMemo(() => {
     if (chartData.length < 2) return null;
     const last = chartData[chartData.length - 1];
     const prev = chartData[chartData.length - 2];
-    
-    let trend = "중립";
-    let signal = "관망";
-    let color = "text-blue-400";
-    
+    let trend = "중립"; let signal = "관망"; let color = "text-blue-400";
     if (last.macd && last.signal) {
-      if (last.macd > last.signal && prev.macd && prev.signal && prev.macd <= prev.signal) {
-        trend = "상승 전환";
-        signal = "매수 검토";
-        color = "text-green-400";
-      } else if (last.macd < last.signal && prev.macd && prev.signal && prev.macd >= prev.signal) {
-        trend = "하락 전환";
-        signal = "매도/관망";
-        color = "text-red-400";
-      } else if (last.macd > last.signal) {
-        trend = "강세 지속";
-        signal = "보유";
-        color = "text-green-400";
-      } else {
-        trend = "약세 지속";
-        signal = "관망";
-        color = "text-red-400";
-      }
+      if (last.macd > last.signal && prev.macd && prev.signal && prev.macd <= prev.signal) { trend = "상승 전환"; signal = "매수 검토"; color = "text-green-400"; }
+      else if (last.macd < last.signal && prev.macd && prev.signal && prev.macd >= prev.signal) { trend = "하락 전환"; signal = "매도/관망"; color = "text-red-400"; }
+      else if (last.macd > last.signal) { trend = "강세 지속"; signal = "보유"; color = "text-green-400"; }
+      else { trend = "약세 지속"; signal = "관망"; color = "text-red-400"; }
     }
-    
     let bbStatus = "밴드 내";
-    if (last.upperBand && last.close >= last.upperBand) {
-      bbStatus = "상단 돌파";
-    } else if (last.lowerBand && last.close <= last.lowerBand) {
-      bbStatus = "하단 터치";
-    }
-
+    if (last.upperBand && last.close >= last.upperBand) { bbStatus = "상단 돌파"; }
+    else if (last.lowerBand && last.close <= last.lowerBand) { bbStatus = "하단 터치"; }
     return { trend, signal, color, bbStatus };
   }, [chartData]);
 
   useEffect(() => {
-    if (!search.trim()) {
-      setSearchResults({ coins: [], exchanges: [] });
-      return;
-    }
-
+    if (!search.trim()) { setSearchResults({ coins: [], exchanges: [] }); return; }
     const s = search.toLowerCase();
-    const localMatches = coins.filter(c => 
-      c.name.toLowerCase().includes(s) || 
-      c.symbol.toLowerCase().includes(s)
-    );
-
-    if (localMatches.length > 0) {
-      setSearchResults({ coins: [], exchanges: [] });
-      return;
-    }
-
+    const localMatches = coins.filter(c => c.name.toLowerCase().includes(s) || c.symbol.toLowerCase().includes(s));
+    if (localMatches.length > 0) { setSearchResults({ coins: [], exchanges: [] }); return; }
     const timer = setTimeout(async () => {
       setIsSearching(true);
       try {
         const results = await searchCoins(search);
-        
-        // Sort coins by relevance: exact symbol match > starts with symbol > others
         const sortedCoins = (results.coins || []).sort((a: any, b: any) => {
-          const aSym = a.symbol.toLowerCase();
-          const bSym = b.symbol.toLowerCase();
-          
-          // Exact symbol match
-          if (aSym === s && bSym !== s) return -1;
-          if (bSym === s && aSym !== s) return 1;
-          
-          // Symbol starts with search
-          if (aSym.startsWith(s) && !bSym.startsWith(s)) return -1;
-          if (bSym.startsWith(s) && !aSym.startsWith(s)) return 1;
-          
-          // Name starts with search
-          const aName = a.name.toLowerCase();
-          const bName = b.name.toLowerCase();
-          if (aName.startsWith(s) && !bName.startsWith(s)) return -1;
-          if (bName.startsWith(s) && !aName.startsWith(s)) return 1;
-          
-          // Market cap rank (lower is better)
-          const aRank = a.market_cap_rank || 999999;
-          const bRank = b.market_cap_rank || 999999;
-          return aRank - bRank;
+          const aSym = a.symbol.toLowerCase(); const bSym = b.symbol.toLowerCase();
+          if (aSym === s && bSym !== s) return -1; if (bSym === s && aSym !== s) return 1;
+          if (aSym.startsWith(s) && !bSym.startsWith(s)) return -1; if (bSym.startsWith(s) && !aSym.startsWith(s)) return 1;
+          const aName = a.name.toLowerCase(); const bName = b.name.toLowerCase();
+          if (aName.startsWith(s) && !bName.startsWith(s)) return -1; if (bName.startsWith(s) && !aName.startsWith(s)) return 1;
+          return (a.market_cap_rank || 999999) - (b.market_cap_rank || 999999);
         });
-
-        setSearchResults({
-          coins: sortedCoins,
-          exchanges: results.exchanges || []
-        });
+        setSearchResults({ coins: sortedCoins, exchanges: results.exchanges || [] });
       } catch (err) {
         console.warn('Search failed:', err);
         setSearchResults({ coins: [], exchanges: [] });
-      } finally {
-        setIsSearching(false);
-      }
-    }, 300); // 300ms debounce
-
+      } finally { setIsSearching(false); }
+    }, 300);
     return () => clearTimeout(timer);
   }, [search, coins]);
 
   const filteredCoins = coins.filter(c => 
-    c.name.toLowerCase().includes(search.toLowerCase()) || 
-    c.symbol.toLowerCase().includes(search.toLowerCase())
+    c.name.toLowerCase().includes(search.toLowerCase()) || c.symbol.toLowerCase().includes(search.toLowerCase())
   ).sort((a, b) => {
     const s = search.toLowerCase();
-    const aSym = a.symbol.toLowerCase();
-    const bSym = b.symbol.toLowerCase();
-    
-    // Exact symbol match
-    if (aSym === s && bSym !== s) return -1;
-    if (bSym === s && aSym !== s) return 1;
-    
-    // Symbol starts with search
-    if (aSym.startsWith(s) && !bSym.startsWith(s)) return -1;
-    if (bSym.startsWith(s) && !aSym.startsWith(s)) return 1;
-    
-    // Name starts with search
-    const aName = a.name.toLowerCase();
-    const bName = b.name.toLowerCase();
-    if (aName.startsWith(s) && !bName.startsWith(s)) return -1;
-    if (bName.startsWith(s) && !aName.startsWith(s)) return 1;
-    
-    // Market cap rank (lower is better)
+    const aSym = a.symbol.toLowerCase(); const bSym = b.symbol.toLowerCase();
+    if (aSym === s && bSym !== s) return -1; if (bSym === s && aSym !== s) return 1;
+    if (aSym.startsWith(s) && !bSym.startsWith(s)) return -1; if (bSym.startsWith(s) && !aSym.startsWith(s)) return 1;
+    const aName = a.name.toLowerCase(); const bName = b.name.toLowerCase();
+    if (aName.startsWith(s) && !bName.startsWith(s)) return -1; if (bName.startsWith(s) && !aName.startsWith(s)) return 1;
     return (a.market_cap_rank || 999999) - (b.market_cap_rank || 999999);
   });
 
@@ -548,11 +396,8 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (isLightMode) {
-      document.documentElement.classList.add('light-mode');
-    } else {
-      document.documentElement.classList.remove('light-mode');
-    }
+    if (isLightMode) { document.documentElement.classList.add('light-mode'); }
+    else { document.documentElement.classList.remove('light-mode'); }
   }, [isLightMode]);
 
   if (loading && !selectedCoin) {
@@ -568,10 +413,7 @@ export default function App() {
                 <h2 className="text-xl font-black text-white">데이터 로드 실패</h2>
                 <p className="text-slate-400 text-sm leading-relaxed">{error}</p>
               </div>
-              <button 
-                onClick={fetchInitialData}
-                className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all shadow-lg shadow-blue-600/20"
-              >
+              <button onClick={fetchInitialData} className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all shadow-lg shadow-blue-600/20">
                 다시 시도하기
               </button>
             </div>
@@ -588,7 +430,6 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-black text-white font-sans selection:bg-blue-500/30">
-      {/* Header */}
       <header className="sticky top-0 z-50 bg-black/80 backdrop-blur-md border-b border-slate-900">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -614,18 +455,8 @@ export default function App() {
               {fearGreed && (
                 <div className="flex items-center gap-2 border-l border-slate-800 pl-6">
                   <span className="text-slate-600">공포/탐욕 지수:</span>
-                  <span className={`font-bold ${
-                    parseInt(fearGreed.value) > 70 ? 'text-green-400' : 
-                    parseInt(fearGreed.value) > 50 ? 'text-blue-400' : 
-                    parseInt(fearGreed.value) > 30 ? 'text-orange-400' : 'text-red-400'
-                  }`}>
-                    {fearGreed.value} ({
-                      fearGreed.value_classification === 'Extreme Greed' ? '극도의 탐욕' :
-                      fearGreed.value_classification === 'Greed' ? '탐욕' :
-                      fearGreed.value_classification === 'Neutral' ? '중립' :
-                      fearGreed.value_classification === 'Fear' ? '공포' :
-                      fearGreed.value_classification === 'Extreme Fear' ? '극도의 공포' : fearGreed.value_classification
-                    })
+                  <span className={`font-bold ${parseInt(fearGreed.value) > 70 ? 'text-green-400' : parseInt(fearGreed.value) > 50 ? 'text-blue-400' : parseInt(fearGreed.value) > 30 ? 'text-orange-400' : 'text-red-400'}`}>
+                    {fearGreed.value} ({fearGreed.value_classification === 'Extreme Greed' ? '극도의 탐욕' : fearGreed.value_classification === 'Greed' ? '탐욕' : fearGreed.value_classification === 'Neutral' ? '중립' : fearGreed.value_classification === 'Fear' ? '공포' : fearGreed.value_classification === 'Extreme Fear' ? '극도의 공포' : fearGreed.value_classification})
                   </span>
                 </div>
               )}
@@ -647,37 +478,19 @@ export default function App() {
               onChange={(e) => setSearch(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
-                  if (searchResults.coins.length > 0) {
-                    handleSelectCoin(searchResults.coins[0]);
-                    setSearch('');
-                  } else if (filteredCoins.length > 0) {
-                    handleSelectCoin(filteredCoins[0]);
-                    setSearch('');
-                  }
+                  if (searchResults.coins.length > 0) { handleSelectCoin(searchResults.coins[0]); setSearch(''); }
+                  else if (filteredCoins.length > 0) { handleSelectCoin(filteredCoins[0]); setSearch(''); }
                 }
               }}
             />
             {search && (
               <div className="absolute top-full left-0 right-0 mt-2 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl max-h-80 overflow-y-auto z-50 p-2">
-                {isSearching && (
-                  <div className="p-4 text-center">
-                    <Loader2 className="w-5 h-5 text-blue-500 animate-spin mx-auto" />
-                  </div>
-                )}
-                
-                {/* Search Results from API */}
+                {isSearching && (<div className="p-4 text-center"><Loader2 className="w-5 h-5 text-blue-500 animate-spin mx-auto" /></div>)}
                 {searchResults.coins.length > 0 && (
                   <div className="mb-2">
                     <p className="text-[10px] text-slate-500 font-bold px-2 py-1 uppercase tracking-widest">코인 검색 결과</p>
                     {searchResults.coins.map(coin => (
-                      <button
-                        key={coin.id}
-                        onClick={() => {
-                          handleSelectCoin(coin);
-                          setSearch('');
-                        }}
-                        className="w-full flex items-center gap-3 p-2 hover:bg-slate-800 rounded-lg transition-colors"
-                      >
+                      <button key={coin.id} onClick={() => { handleSelectCoin(coin); setSearch(''); }} className="w-full flex items-center gap-3 p-2 hover:bg-slate-800 rounded-lg transition-colors">
                         <img src={coin.thumb} alt="" className="w-6 h-6 rounded-full" referrerPolicy="no-referrer" />
                         <span className="font-bold text-sm text-white">{coin.symbol.toUpperCase()}</span>
                         <span className="text-xs text-slate-400">{coin.name}</span>
@@ -686,15 +499,11 @@ export default function App() {
                     ))}
                   </div>
                 )}
-
                 {searchResults.exchanges.length > 0 && (
                   <div className="mb-2 border-t border-slate-800 pt-2">
                     <p className="text-[10px] text-slate-500 font-bold px-2 py-1 uppercase tracking-widest">거래소 검색 결과</p>
                     {searchResults.exchanges.map(ex => (
-                      <div
-                        key={ex.id}
-                        className="w-full flex items-center gap-3 p-2"
-                      >
+                      <div key={ex.id} className="w-full flex items-center gap-3 p-2">
                         <img src={ex.thumb} alt="" className="w-6 h-6 rounded-full" referrerPolicy="no-referrer" />
                         <span className="font-bold text-sm text-white">{ex.name}</span>
                         <span className="text-[10px] text-slate-500 ml-auto">Market</span>
@@ -702,20 +511,11 @@ export default function App() {
                     ))}
                   </div>
                 )}
-
-                {/* Local Filtered Coins (Fallback/Quick) */}
                 {searchResults.coins.length === 0 && searchResults.exchanges.length === 0 && !isSearching && filteredCoins.length > 0 && (
                   <div>
                     <p className="text-[10px] text-slate-500 font-bold px-2 py-1 uppercase tracking-widest">상위 코인</p>
                     {filteredCoins.map(coin => (
-                      <button
-                        key={coin.id}
-                        onClick={() => {
-                          handleSelectCoin(coin);
-                          setSearch('');
-                        }}
-                        className="w-full flex items-center gap-3 p-2 hover:bg-slate-800 rounded-lg transition-colors"
-                      >
+                      <button key={coin.id} onClick={() => { handleSelectCoin(coin); setSearch(''); }} className="w-full flex items-center gap-3 p-2 hover:bg-slate-800 rounded-lg transition-colors">
                         <img src={coin.image} alt="" className="w-6 h-6 rounded-full" referrerPolicy="no-referrer" />
                         <span className="font-bold text-sm text-white">{coin.symbol.toUpperCase()}</span>
                         <span className="text-xs text-slate-400">{coin.name}</span>
@@ -723,30 +523,18 @@ export default function App() {
                     ))}
                   </div>
                 )}
-
                 {!isSearching && searchResults.coins.length === 0 && searchResults.exchanges.length === 0 && filteredCoins.length === 0 && (
-                  <div className="p-4 text-center text-slate-500 text-sm">
-                    검색 결과가 없습니다.
-                  </div>
+                  <div className="p-4 text-center text-slate-500 text-sm">검색 결과가 없습니다.</div>
                 )}
               </div>
             )}
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => setIsLightMode(!isLightMode)}
-              className="p-2 hover:bg-slate-800 rounded-full transition-all text-slate-400 hover:text-white"
-              title={isLightMode ? "다크 모드로 전환" : "라이트 모드로 전환"}
-            >
+            <button onClick={() => setIsLightMode(!isLightMode)} className="p-2 hover:bg-slate-800 rounded-full transition-all text-slate-400 hover:text-white" title={isLightMode ? "다크 모드로 전환" : "라이트 모드로 전환"}>
               {isLightMode ? <Moon size={20} /> : <Sun size={20} />}
             </button>
-            <button 
-              onClick={refreshMarket}
-              disabled={isRefreshing}
-              className="p-2 hover:bg-slate-800 rounded-full transition-all text-slate-400 hover:text-white disabled:opacity-50"
-              title="새로고침"
-            >
+            <button onClick={refreshMarket} disabled={isRefreshing} className="p-2 hover:bg-slate-800 rounded-full transition-all text-slate-400 hover:text-white disabled:opacity-50" title="새로고침">
               <RefreshCw size={20} className={cn(isRefreshing && "animate-spin")} />
             </button>
           </div>
@@ -758,12 +546,7 @@ export default function App() {
           <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 flex items-center gap-3 text-red-400">
             <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
             <p className="text-sm font-bold">오류: {error}</p>
-            <button 
-              onClick={refreshMarket}
-              className="ml-auto text-xs bg-red-500/20 hover:bg-red-500/30 px-3 py-1 rounded-lg transition-colors"
-            >
-              다시 시도
-            </button>
+            <button onClick={refreshMarket} className="ml-auto text-xs bg-red-500/20 hover:bg-red-500/30 px-3 py-1 rounded-lg transition-colors">다시 시도</button>
           </div>
         )}
 
@@ -782,71 +565,48 @@ export default function App() {
 
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
             <div className="lg:col-span-3 space-y-4">
-             <div className="flex items-center gap-3 bg-slate-900/20 px-4 py-2 rounded-xl border border-slate-800/50 flex-wrap">
-  <div className="flex items-center gap-3">
-    <h3 className="text-base font-black text-white">
-      {selectedCoin?.name}
-    </h3>
-    <span className="text-xs font-mono text-slate-500 bg-black px-2 py-0.5 rounded border border-slate-900">
-      {selectedCoin?.symbol.toUpperCase()} / USDT
-    </span>
-    {chartSource && chartSource !== 'None' && (
-      <span className="text-[10px] font-bold px-2 py-0.5 rounded border bg-blue-500/10 text-blue-400 border-blue-500/20">
-        {chartSource}
-      </span>
-    )}
-  </div>
-
-  <div className="flex bg-black p-0.5 rounded-lg border border-slate-900">
-    {INTERVALS.map((int) => (
-      <button
-        key={int.value}
-        onClick={() => setInterval(int.value)}
-        className={cn(
-          "px-3 py-1 rounded-md text-[10px] font-bold transition-all",
-          interval === int.value
-            ? "bg-blue-600 text-white shadow-lg shadow-blue-500/20"
-            : "text-slate-500 hover:text-slate-300"
-        )}
-      >
-        {int.label}
-      </button>
-    ))}
-  </div>
-
-<span className="flex items-center gap-1">
-  <span className="text-[10px] text-slate-500">24시간 변동</span>
-  <span className={cn(
-    "text-xs font-mono font-bold",
-    (selectedCoin?.price_change_percentage_24h || 0) >= 0 ? "text-green-400" : "text-red-400"
-  )}>
-    {(selectedCoin?.price_change_percentage_24h || 0).toFixed(2)}%
-  </span>
-</span>
-
-  <span className="flex items-center gap-1">
-  <span className="text-[10px] text-slate-500">시가총액</span>
-  <span className="text-xs font-mono text-slate-400">
-    ${selectedCoin?.market_cap ? (selectedCoin.market_cap / 1e9).toFixed(1) + 'B' : '-'}
-  </span>
-</span>
-
- {fearGreed && (
-  <span className="flex items-center gap-1">
-    <span className="text-[10px] text-slate-500">시장심리</span>
-    <span className={cn(
-      "px-2 py-0.5 rounded text-[10px] font-bold border",
-      fearGreed.value_classification.includes('Greed')
-        ? "text-green-400 bg-green-500/10 border-green-500/20"
-        : fearGreed.value_classification.includes('Fear')
-        ? "text-red-400 bg-red-500/10 border-red-500/20"
-        : "text-blue-400 bg-blue-500/10 border-blue-500/20"
-    )}>
-      {fearGreed.value_classification.toUpperCase()}
-    </span>
-  </span>
-)}
-</div>
+              <div className="flex items-center gap-3 bg-slate-900/20 px-4 py-2 rounded-xl border border-slate-800/50 flex-wrap">
+                <div className="flex items-center gap-3">
+                  <h3 className="text-base font-black text-white">{selectedCoin?.name}</h3>
+                  <span className="text-xs font-mono text-slate-500 bg-black px-2 py-0.5 rounded border border-slate-900">
+                    {selectedCoin?.symbol.toUpperCase()} / USDT
+                  </span>
+                  {chartSource && chartSource !== 'None' && (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded border bg-blue-500/10 text-blue-400 border-blue-500/20">{chartSource}</span>
+                  )}
+                </div>
+                <div className="flex bg-black p-0.5 rounded-lg border border-slate-900">
+                  {INTERVALS.map((int) => (
+                    <button key={int.value} onClick={() => setInterval(int.value)}
+                      className={cn("px-3 py-1 rounded-md text-[10px] font-bold transition-all", interval === int.value ? "bg-blue-600 text-white shadow-lg shadow-blue-500/20" : "text-slate-500 hover:text-slate-300")}>
+                      {int.label}
+                    </button>
+                  ))}
+                </div>
+                <span className="flex items-center gap-1">
+                  <span className="text-[10px] text-slate-500">24시간 변동</span>
+                  <span className={cn("text-xs font-mono font-bold", (selectedCoin?.price_change_percentage_24h || 0) >= 0 ? "text-green-400" : "text-red-400")}>
+                    {(selectedCoin?.price_change_percentage_24h || 0).toFixed(2)}%
+                  </span>
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="text-[10px] text-slate-500">시가총액</span>
+                  <span className="text-xs font-mono text-slate-400">
+                    ${selectedCoin?.market_cap ? (selectedCoin.market_cap / 1e9).toFixed(1) + 'B' : '-'}
+                  </span>
+                </span>
+                {fearGreed && (
+                  <span className="flex items-center gap-1">
+                    <span className="text-[10px] text-slate-500">시장심리</span>
+                    <span className={cn("px-2 py-0.5 rounded text-[10px] font-bold border",
+                      fearGreed.value_classification.includes('Greed') ? "text-green-400 bg-green-500/10 border-green-500/20"
+                      : fearGreed.value_classification.includes('Fear') ? "text-red-400 bg-red-500/10 border-red-500/20"
+                      : "text-blue-400 bg-blue-500/10 border-blue-500/20")}>
+                      {fearGreed.value_classification.toUpperCase()}
+                    </span>
+                  </span>
+                )}
+              </div>
 
               <CryptoChart 
                 data={chartData} 
@@ -854,36 +614,23 @@ export default function App() {
                 interval={interval} 
                 exchangeRate={exchangeRate}
               />
+            </div>
 
-             </div>
-</div> 
             <div className="lg:col-span-1 flex flex-col gap-4">
-              <FuturesAnalysisCard 
-                binance={binanceDerivatives} 
-                bybit={bybitDerivatives} 
-                okx={okxDerivatives} 
-                top3={top3Derivatives} 
-                technical={technicalAnalysis} 
-              />
-              
-              {/* 시가총액 순위 표시 카드 */}
+              <FuturesAnalysisCard binance={binanceDerivatives} bybit={bybitDerivatives} okx={okxDerivatives} top3={top3Derivatives} technical={technicalAnalysis} />
               {selectedCoin && (
                 <div className="bg-gradient-to-r from-[var(--rank-bg-from)] via-[var(--rank-bg-via)] to-[var(--rank-bg-to)] rounded-xl border border-[var(--rank-border)] p-6 flex flex-col justify-center shadow-lg relative overflow-hidden group">
                   <div className="absolute top-1/2 -translate-y-1/2 right-4 opacity-10 group-hover:opacity-20 transition-all duration-500 group-hover:scale-110">
                     <Globe size={80} className="text-blue-500" />
                   </div>
                   <div className="relative z-10">
-                    <p className="text-xs font-bold text-blue-400/80 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
-                      글로벌 시가총액 순위
-                    </p>
+                    <p className="text-xs font-bold text-blue-400/80 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">글로벌 시가총액 순위</p>
                     <div className="flex items-baseline gap-2">
                       <span className="text-5xl font-black text-[var(--rank-text)] hover:text-blue-400 transition-colors cursor-default drop-shadow-md">
                         {selectedCoin.market_cap_rank ? `#${selectedCoin.market_cap_rank}` : 'N/A'}
                       </span>
                       <span className="text-sm font-bold text-slate-500">위</span>
                     </div>
-
-                    {/* 순위 변동 표시 */}
                     {(() => {
                       const rankChange = getRankChange(selectedCoin);
                       if (rankChange === null || rankChange === 0) {
@@ -910,7 +657,6 @@ export default function App() {
               )}
             </div>
           </div>
-        </div>
         </section>
 
         {/* II. 상세 정보 및 스테이킹 */}
@@ -925,14 +671,11 @@ export default function App() {
               <h2 className="text-xl font-black text-white uppercase tracking-tight">상세 정보 및 스테이킹</h2>
             </div>
           </div>
-
           {selectedCoin && (
             <div className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="md:col-span-2 bg-gradient-to-br from-[var(--banner-1-from)] to-[var(--banner-1-to)] rounded-xl p-8 text-[var(--banner-1-text)] shadow-xl relative overflow-hidden group">
-                  <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                    <TrendingUp size={120} />
-                  </div>
+                  <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity"><TrendingUp size={120} /></div>
                   <div className="relative z-10">
                     <div className="flex items-center gap-4 mb-6">
                       <img src={selectedCoin.image} alt={selectedCoin.name} className="w-12 h-12 rounded-full bg-white/20 p-1" referrerPolicy="no-referrer" />
@@ -959,7 +702,6 @@ export default function App() {
                     </div>
                   </div>
                 </div>
-                
                 <div className="bg-black rounded-xl border border-slate-900 p-8 flex flex-col justify-center shadow-lg">
                   <div className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
                     <Info size={16} className="text-blue-400" />
@@ -968,12 +710,7 @@ export default function App() {
                   </div>
                 </div>
               </div>
-
-              <CoinDetails 
-                coin={selectedCoin} 
-                exchanges={exchanges} 
-                staking={staking} 
-              />
+              <CoinDetails coin={selectedCoin} exchanges={exchanges} staking={staking} />
             </div>
           )}
         </section>
@@ -1023,18 +760,10 @@ export default function App() {
               <h2 className="text-xl font-black text-white uppercase tracking-tight">섹션별 리더 (TOP 5)</h2>
             </div>
           </div>
-          
-          <SectorRankings 
-            sectors={SECTORS}
-            sectorData={sectorData}
-            onSelectCoin={handleSelectCoin}
-            onSelectSector={fetchSectorData}
-            isFetching={loadingSectors}
-          />
+          <SectorRankings sectors={SECTORS} sectorData={sectorData} onSelectCoin={handleSelectCoin} onSelectSector={fetchSectorData} isFetching={loadingSectors} />
         </section>
       </main>
 
-      {/* Footer */}
       <footer className="bg-black border-t border-slate-900 py-12 mt-12">
         <div className="max-w-7xl mx-auto px-4 flex flex-col md:flex-row justify-between items-center gap-8">
           <div className="flex items-center gap-2">
@@ -1044,9 +773,7 @@ export default function App() {
               <span className="text-[9px] font-mono text-white font-bold uppercase tracking-widest">by Donald</span>
             </div>
           </div>
-          <p className="text-xs text-slate-600 font-mono">
-            데이터 제공: CoinGecko & Binance Public API. 60초마다 실시간 업데이트.
-          </p>
+          <p className="text-xs text-slate-600 font-mono">데이터 제공: CoinGecko & Binance Public API. 60초마다 실시간 업데이트.</p>
           <div className="flex gap-6">
             <a href="#" className="text-xs text-slate-500 hover:text-blue-400 transition-colors">이용약관</a>
             <a href="#" className="text-xs text-slate-500 hover:text-blue-400 transition-colors">개인정보처리방침</a>
