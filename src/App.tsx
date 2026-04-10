@@ -847,7 +847,6 @@ export default function App() {
   </span>
 )}
 </div>
-</div>
 
               <CryptoChart 
                 data={chartData} 
