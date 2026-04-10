@@ -854,45 +854,7 @@ export default function App() {
                 interval={interval} 
                 exchangeRate={exchangeRate}
               />
-
-              {/* Stats Row Below Chart */}
-              <div className="bg-black rounded-xl border border-slate-900 p-4 flex flex-wrap items-center justify-between gap-6 shadow-lg">
-                <div className="flex items-center gap-3">
-                  <span className="text-[10px] uppercase tracking-widest font-bold text-slate-500">24시간 변동</span>
-                  <span className={cn(
-                    "text-xl font-mono font-black",
-                    (selectedCoin?.price_change_percentage_24h || 0) >= 0 ? "text-green-400" : "text-red-400"
-                  )}>
-                    {(selectedCoin?.price_change_percentage_24h || 0).toFixed(2)}%
-                  </span>
-                </div>
-                
-                <div className="flex items-center gap-3">
-                  <span className="text-[10px] uppercase tracking-widest font-bold text-slate-500">시가총액</span>
-                  <span className="text-lg font-mono font-black text-white">
-                    ${selectedCoin?.market_cap.toLocaleString()}
-                  </span>
-                  <span className="text-[10px] font-bold text-slate-500 bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800">
-                    #{selectedCoin?.market_cap_rank}
-                  </span>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <span className="text-[10px] uppercase tracking-widest font-bold text-slate-500">시장 심리</span>
-                  <span className={cn(
-                    "text-xs font-bold px-3 py-1 rounded-full border",
-                    fearGreed?.value_classification.includes('Greed')
-                      ? "text-green-400 bg-green-500/10 border-green-500/20"
-                      : fearGreed?.value_classification.includes('Fear')
-                      ? "text-red-400 bg-red-500/10 border-red-500/20"
-                      : "text-blue-400 bg-blue-500/10 border-blue-500/20"
-                  )}>
-                    {fearGreed?.value_classification.toUpperCase() || 'NEUTRAL'}
-                  </span>
-                </div>
-              </div>
-            </div>
-
+             
             <div className="lg:col-span-1 flex flex-col gap-4">
               <FuturesAnalysisCard 
                 binance={binanceDerivatives} 
