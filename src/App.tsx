@@ -854,7 +854,9 @@ export default function App() {
                 interval={interval} 
                 exchangeRate={exchangeRate}
               />
-             
+
+             </div>
+</div> 
             <div className="lg:col-span-1 flex flex-col gap-4">
               <FuturesAnalysisCard 
                 binance={binanceDerivatives} 
