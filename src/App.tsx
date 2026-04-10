@@ -814,18 +814,26 @@ export default function App() {
     ))}
   </div>
 
+<span className="flex items-center gap-1">
+  <span className="text-[10px] text-slate-500">24시간 변동</span>
   <span className={cn(
     "text-xs font-mono font-bold",
     (selectedCoin?.price_change_percentage_24h || 0) >= 0 ? "text-green-400" : "text-red-400"
   )}>
     {(selectedCoin?.price_change_percentage_24h || 0).toFixed(2)}%
   </span>
+</span>
 
+  <span className="flex items-center gap-1">
+  <span className="text-[10px] text-slate-500">시가총액</span>
   <span className="text-xs font-mono text-slate-400">
     ${selectedCoin?.market_cap ? (selectedCoin.market_cap / 1e9).toFixed(1) + 'B' : '-'}
   </span>
+</span>
 
-  {fearGreed && (
+ {fearGreed && (
+  <span className="flex items-center gap-1">
+    <span className="text-[10px] text-slate-500">시장심리</span>
     <span className={cn(
       "px-2 py-0.5 rounded text-[10px] font-bold border",
       fearGreed.value_classification.includes('Greed')
@@ -836,7 +844,9 @@ export default function App() {
     )}>
       {fearGreed.value_classification.toUpperCase()}
     </span>
-  )}
+  </span>
+)}
+</div>
 </div>
 
               <CryptoChart 
