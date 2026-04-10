@@ -782,37 +782,62 @@ export default function App() {
 
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
             <div className="lg:col-span-3 space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900/20 p-4 rounded-xl border border-slate-800/50">
-                <div className="flex items-center gap-3">
-                  <h3 className="text-2xl font-black text-white">
-                    {selectedCoin?.name}
-                  </h3>
-                  <span className="text-sm font-mono text-slate-500 bg-black px-2 py-0.5 rounded border border-slate-900">
-                    {selectedCoin?.symbol.toUpperCase()} / USDT
-                  </span>
-                  {chartSource && chartSource !== 'None' && (
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded border bg-blue-500/10 text-blue-400 border-blue-500/20">
-                      {chartSource}
-                    </span>
-                  )}
-                </div>
-                <div className="flex bg-black p-0.5 rounded-lg border border-slate-900">
-                  {INTERVALS.map((int) => (
-                    <button
-                      key={int.value}
-                      onClick={() => setInterval(int.value)}
-                      className={cn(
-                        "px-3 py-1 rounded-md text-[10px] font-bold transition-all",
-                        interval === int.value 
-                          ? "bg-blue-600 text-white shadow-lg shadow-blue-500/20" 
-                          : "text-slate-500 hover:text-slate-300"
-                      )}
-                    >
-                      {int.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
+             <div className="flex items-center gap-3 bg-slate-900/20 px-4 py-2 rounded-xl border border-slate-800/50 flex-wrap">
+  <div className="flex items-center gap-3">
+    <h3 className="text-base font-black text-white">
+      {selectedCoin?.name}
+    </h3>
+    <span className="text-xs font-mono text-slate-500 bg-black px-2 py-0.5 rounded border border-slate-900">
+      {selectedCoin?.symbol.toUpperCase()} / USDT
+    </span>
+    {chartSource && chartSource !== 'None' && (
+      <span className="text-[10px] font-bold px-2 py-0.5 rounded border bg-blue-500/10 text-blue-400 border-blue-500/20">
+        {chartSource}
+      </span>
+    )}
+  </div>
+
+  <div className="flex bg-black p-0.5 rounded-lg border border-slate-900">
+    {INTERVALS.map((int) => (
+      <button
+        key={int.value}
+        onClick={() => setInterval(int.value)}
+        className={cn(
+          "px-3 py-1 rounded-md text-[10px] font-bold transition-all",
+          interval === int.value
+            ? "bg-blue-600 text-white shadow-lg shadow-blue-500/20"
+            : "text-slate-500 hover:text-slate-300"
+        )}
+      >
+        {int.label}
+      </button>
+    ))}
+  </div>
+
+  <span className={cn(
+    "text-xs font-mono font-bold",
+    (selectedCoin?.price_change_percentage_24h || 0) >= 0 ? "text-green-400" : "text-red-400"
+  )}>
+    {(selectedCoin?.price_change_percentage_24h || 0).toFixed(2)}%
+  </span>
+
+  <span className="text-xs font-mono text-slate-400">
+    ${selectedCoin?.market_cap ? (selectedCoin.market_cap / 1e9).toFixed(1) + 'B' : '-'}
+  </span>
+
+  {fearGreed && (
+    <span className={cn(
+      "px-2 py-0.5 rounded text-[10px] font-bold border",
+      fearGreed.value_classification.includes('Greed')
+        ? "text-green-400 bg-green-500/10 border-green-500/20"
+        : fearGreed.value_classification.includes('Fear')
+        ? "text-red-400 bg-red-500/10 border-red-500/20"
+        : "text-blue-400 bg-blue-500/10 border-blue-500/20"
+    )}>
+      {fearGreed.value_classification.toUpperCase()}
+    </span>
+  )}
+</div>
 
               <CryptoChart 
                 data={chartData} 
