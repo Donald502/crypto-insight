@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { createChart, ColorType } from 'lightweight-charts';
+import { createChart, ColorType, CandlestickSeries, LineSeries, HistogramSeries } from 'lightweight-charts';
 import { BarChart3 } from 'lucide-react';
 import { OHLCData } from '../types';
 
@@ -25,63 +25,41 @@ export const CryptoChart: React.FC<ChartProps> = ({ data, symbol, interval, exch
       timeScale: { borderColor: '#1e293b', timeVisible: true, secondsVisible: false },
     };
 
-    // 가격 차트
-    const priceChart = createChart(priceRef.current, {
-      ...commonOptions,
-      width: priceRef.current.clientWidth,
-      height: 380,
-    });
-
-    const candleSeries = priceChart.addCandlestickSeries({
-      upColor: '#10b981',
-      downColor: '#ef4444',
-      borderUpColor: '#10b981',
-      borderDownColor: '#ef4444',
-      wickUpColor: '#10b981',
-      wickDownColor: '#ef4444',
-    });
-
-    const upperBandSeries = priceChart.addLineSeries({ color: '#3b82f6', lineWidth: 1, lineStyle: 2, priceLineVisible: false });
-    const middleBandSeries = priceChart.addLineSeries({ color: '#475569', lineWidth: 1, priceLineVisible: false });
-    const lowerBandSeries = priceChart.addLineSeries({ color: '#8b5cf6', lineWidth: 1, lineStyle: 2, priceLineVisible: false });
-
     const toUnix = (t: number) => Math.floor(t / 1000) as any;
 
+    // 가격 차트
+    const priceChart = createChart(priceRef.current, { ...commonOptions, width: priceRef.current.clientWidth, height: 380 });
+
+    const candleSeries = priceChart.addSeries(CandlestickSeries, {
+      upColor: '#10b981', downColor: '#ef4444',
+      borderUpColor: '#10b981', borderDownColor: '#ef4444',
+      wickUpColor: '#10b981', wickDownColor: '#ef4444',
+    });
+    const upperBand = priceChart.addSeries(LineSeries, { color: '#3b82f6', lineWidth: 1, lineStyle: 2, priceLineVisible: false });
+    const middleBand = priceChart.addSeries(LineSeries, { color: '#475569', lineWidth: 1, priceLineVisible: false });
+    const lowerBand = priceChart.addSeries(LineSeries, { color: '#8b5cf6', lineWidth: 1, lineStyle: 2, priceLineVisible: false });
+
     candleSeries.setData(data.map(d => ({ time: toUnix(d.time), open: d.open, high: d.high, low: d.low, close: d.close })));
-    upperBandSeries.setData(data.filter(d => d.upperBand).map(d => ({ time: toUnix(d.time), value: d.upperBand! })));
-    middleBandSeries.setData(data.filter(d => d.middleBand).map(d => ({ time: toUnix(d.time), value: d.middleBand! })));
-    lowerBandSeries.setData(data.filter(d => d.lowerBand).map(d => ({ time: toUnix(d.time), value: d.lowerBand! })));
+    upperBand.setData(data.filter(d => d.upperBand).map(d => ({ time: toUnix(d.time), value: d.upperBand! })));
+    middleBand.setData(data.filter(d => d.middleBand).map(d => ({ time: toUnix(d.time), value: d.middleBand! })));
+    lowerBand.setData(data.filter(d => d.lowerBand).map(d => ({ time: toUnix(d.time), value: d.lowerBand! })));
     priceChart.timeScale().fitContent();
 
     // 거래량 차트
-    const volumeChart = createChart(volumeRef.current, {
-      ...commonOptions,
-      width: volumeRef.current.clientWidth,
-      height: 120,
-    });
-
-    const volumeSeries = volumeChart.addHistogramSeries({
-      priceFormat: { type: 'volume' },
-      priceScaleId: '',
-    });
+    const volumeChart = createChart(volumeRef.current, { ...commonOptions, width: volumeRef.current.clientWidth, height: 120 });
+    const volumeSeries = volumeChart.addSeries(HistogramSeries, { priceFormat: { type: 'volume' }, priceScaleId: '' });
     volumeSeries.priceScale().applyOptions({ scaleMargins: { top: 0.1, bottom: 0 } });
     volumeSeries.setData(data.map((d, i) => ({
-      time: toUnix(d.time),
-      value: d.volume || 0,
+      time: toUnix(d.time), value: d.volume || 0,
       color: i > 0 && d.close >= data[i - 1].close ? '#10b98166' : '#ef444466',
     })));
     volumeChart.timeScale().fitContent();
 
     // MACD 차트
-    const macdChart = createChart(macdRef.current, {
-      ...commonOptions,
-      width: macdRef.current.clientWidth,
-      height: 150,
-    });
-
-    const histSeries = macdChart.addHistogramSeries({ priceScaleId: 'right' });
-    const macdLine = macdChart.addLineSeries({ color: '#3b82f6', lineWidth: 1, priceLineVisible: false });
-    const signalLine = macdChart.addLineSeries({ color: '#eab308', lineWidth: 1, priceLineVisible: false });
+    const macdChart = createChart(macdRef.current, { ...commonOptions, width: macdRef.current.clientWidth, height: 150 });
+    const histSeries = macdChart.addSeries(HistogramSeries, { priceScaleId: 'right' });
+    const macdLine = macdChart.addSeries(LineSeries, { color: '#3b82f6', lineWidth: 1, priceLineVisible: false });
+    const signalLine = macdChart.addSeries(LineSeries, { color: '#eab308', lineWidth: 1, priceLineVisible: false });
 
     histSeries.setData(data.filter(d => d.histogram !== undefined).map(d => ({
       time: toUnix(d.time), value: d.histogram!, color: (d.histogram || 0) >= 0 ? '#10b98180' : '#ef444480',
@@ -110,9 +88,7 @@ export const CryptoChart: React.FC<ChartProps> = ({ data, symbol, interval, exch
 
     return () => {
       window.removeEventListener('resize', handleResize);
-      priceChart.remove();
-      volumeChart.remove();
-      macdChart.remove();
+      priceChart.remove(); volumeChart.remove(); macdChart.remove();
     };
   }, [data, exchangeRate]);
 
