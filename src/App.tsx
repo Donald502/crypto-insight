@@ -910,6 +910,7 @@ export default function App() {
               )}
             </div>
           </div>
+        </div>
         </section>
 
         {/* II. 상세 정보 및 스테이킹 */}
