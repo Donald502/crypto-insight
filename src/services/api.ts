@@ -98,9 +98,9 @@ async function fetchWithRetry(url: string, retries = 3, delay = 3000, ttl = 3000
               'Accept': 'application/json',
             }
           });
-          
+
           if (response.status === 429) {
-            const waitTime = delay * Math.pow(2, i + 2) + (Math.random() * 3000); 
+            const waitTime = delay * Math.pow(2, i + 2) + (Math.random() * 3000);
             if (!silent) console.warn(`[Rate Limit] ${url}. Waiting ${Math.round(waitTime)}ms...`);
             await new Promise(r => setTimeout(r, waitTime));
             continue;
@@ -110,7 +110,7 @@ async function fetchWithRetry(url: string, retries = 3, delay = 3000, ttl = 3000
             const text = await response.text();
             throw new Error(`HTTP ${response.status}: ${text.substring(0, 100)}`);
           }
-          
+
           const data = await response.json();
           setCachedData(url, data);
           delete pendingRequests[url];
@@ -123,7 +123,7 @@ async function fetchWithRetry(url: string, retries = 3, delay = 3000, ttl = 3000
               console.error(`[Final Failure] ${url}:`, error.message);
             }
           }
-          
+
           if (i === retries - 1) {
             const isNetworkError = error.message === 'Failed to fetch' || error.message.includes('NetworkError');
             if (isNetworkError) {
@@ -135,9 +135,9 @@ async function fetchWithRetry(url: string, retries = 3, delay = 3000, ttl = 3000
             delete pendingRequests[url];
             return reject(error);
           }
-          
-          const backoffDelay = (error.message === 'Failed to fetch' || error.message.includes('NetworkError')) 
-            ? delay * Math.pow(3, i + 1) 
+
+          const backoffDelay = (error.message === 'Failed to fetch' || error.message.includes('NetworkError'))
+            ? delay * Math.pow(3, i + 1)
             : delay * Math.pow(2, i);
           const jitter = Math.random() * 3000;
           await new Promise(r => setTimeout(r, backoffDelay + jitter));
@@ -161,7 +161,7 @@ export async function getFearGreedIndex() {
 
 export async function getGlobalData() {
   // Global data doesn't change every second, cache for 5 minutes
-  return fetchWithRetry(`${COINGECKO_BASE}/global`, 3, 2000, 300000); 
+  return fetchWithRetry(`${COINGECKO_BASE}/global`, 3, 2000, 300000);
 }
 
 export async function getTopCoins(limit = 250): Promise<Coin[]> {
@@ -183,7 +183,7 @@ export async function getBinanceKlines(symbol: string, interval: string, limit =
   const lowerSymbol = symbol.toLowerCase();
   const baseSymbol = BINANCE_SYMBOL_MAP[lowerSymbol] || symbol.toUpperCase();
   const binanceSymbol = baseSymbol.endsWith('USDT') ? baseSymbol : `${baseSymbol}USDT`;
-  
+
   const endpoints = [
     `${BINANCE_BASE}/klines`,
     `https://api1.binance.com/api/v3/klines`,
@@ -214,7 +214,7 @@ export async function getOKXKlines(symbol: string, interval: string, limit = 100
   const barMap: Record<string, string> = { '15m': '15m', '1h': '1H', '4h': '4H', '1d': '1D', '3d': '3D' };
   const bar = barMap[interval] || '1H';
   const instId = `${baseSymbol}-USDT`;
-  
+
   try {
     const res = await fetchWithRetry(`https://www.okx.com/api/v5/market/candles?instId=${instId}&bar=${bar}&limit=${limit}`, 1, 500, 30000, true);
     if (res && res.data && Array.isArray(res.data)) {
@@ -227,7 +227,7 @@ export async function getOKXKlines(symbol: string, interval: string, limit = 100
         volume: parseFloat(d[5]),
       })).reverse();
     }
-  } catch (e) {}
+  } catch (e) { }
   return [];
 }
 
@@ -251,7 +251,7 @@ export async function getUpbitKlines(symbol: string, interval: string, limit = 1
         volume: d.candle_acc_trade_volume,
       })).reverse();
     }
-  } catch (e) {}
+  } catch (e) { }
   return [];
 }
 
@@ -259,7 +259,7 @@ export async function getCoinbaseKlines(symbol: string, interval: string, limit 
   const granularityMap: Record<string, number> = { '15m': 900, '1h': 3600, '4h': 14400, '1d': 86400 };
   const granularity = granularityMap[interval] || 3600;
   const product = `${symbol.toUpperCase()}-USD`;
-  
+
   try {
     const data = await fetchWithRetry(`https://api.exchange.coinbase.com/products/${product}/candles?granularity=${granularity}`, 1, 500, 30000, true);
     if (Array.isArray(data)) {
@@ -272,7 +272,7 @@ export async function getCoinbaseKlines(symbol: string, interval: string, limit 
         volume: d[5],
       })).reverse();
     }
-  } catch (e) {}
+  } catch (e) { }
   return [];
 }
 
@@ -280,7 +280,7 @@ export async function getKrakenKlines(symbol: string, interval: string, limit = 
   const intervalMap: Record<string, number> = { '15m': 15, '1h': 60, '4h': 240, '1d': 1440 };
   const krakenInterval = intervalMap[interval] || 60;
   const pair = `${symbol.toUpperCase()}USD`;
-  
+
   try {
     const res = await fetchWithRetry(`https://api.kraken.com/0/public/OHLC?pair=${pair}&interval=${krakenInterval}`, 1, 500, 30000, true);
     if (res && res.result) {
@@ -297,14 +297,14 @@ export async function getKrakenKlines(symbol: string, interval: string, limit = 
         }));
       }
     }
-  } catch (e) {}
+  } catch (e) { }
   return [];
 }
 
 export async function getBithumbKlines(symbol: string, interval: string, limit = 100): Promise<OHLCData[]> {
   const intervalMap: Record<string, string> = { '15m': '30m', '1h': '1h', '4h': '6h', '1d': '24h' };
   const bithumbInterval = intervalMap[interval] || '1h';
-  
+
   try {
     const res = await fetchWithRetry(`https://api.bithumb.com/public/candlestick/${symbol.toUpperCase()}_KRW/${bithumbInterval}`, 1, 500, 30000, true);
     if (res && res.data && Array.isArray(res.data)) {
@@ -317,7 +317,7 @@ export async function getBithumbKlines(symbol: string, interval: string, limit =
         volume: parseFloat(d[5]),
       }));
     }
-  } catch (e) {}
+  } catch (e) { }
   return [];
 }
 
@@ -325,7 +325,7 @@ export async function getGateIoKlines(symbol: string, interval: string, limit = 
   const intervalMap: Record<string, string> = { '15m': '15m', '1h': '1h', '4h': '4h', '1d': '1d', '3d': '1d' };
   const gateInterval = intervalMap[interval] || '1h';
   const pair = `${symbol.toUpperCase()}_USDT`;
-  
+
   try {
     const data = await fetchWithRetry(`https://api.gateio.ws/api/v4/spot/candlesticks?currency_pair=${pair}&interval=${gateInterval}&limit=${limit}`, 1, 500, 30000, true);
     if (Array.isArray(data)) {
@@ -338,7 +338,7 @@ export async function getGateIoKlines(symbol: string, interval: string, limit = 
         volume: parseFloat(d[1]),
       }));
     }
-  } catch (e) {}
+  } catch (e) { }
   return [];
 }
 
@@ -361,7 +361,7 @@ export async function getBybitKlines(symbol: string, interval: string, limit = 1
   const intervalMap: Record<string, string> = { '15m': '15', '1h': '60', '4h': '240', '1d': 'D' };
   const bybitInterval = intervalMap[interval] || '60';
   const bybitSymbol = `${baseSymbol}USDT`;
-  
+
   try {
     const res = await fetchWithRetry(`https://api.bybit.com/v5/market/kline?category=spot&symbol=${bybitSymbol}&interval=${bybitInterval}&limit=${limit}`, 1, 500, 30000, true);
     if (res && res.result && Array.isArray(res.result.list)) {
@@ -374,7 +374,7 @@ export async function getBybitKlines(symbol: string, interval: string, limit = 1
         volume: parseFloat(d[5]),
       })).reverse();
     }
-  } catch (e) {}
+  } catch (e) { }
   return [];
 }
 
@@ -388,7 +388,7 @@ export async function getCoinGeckoOHLC(coinId: string, interval: string): Promis
 
     const url = `${COINGECKO_BASE}/coins/${coinId}/ohlc?vs_currency=usd&days=${days}`;
     const data = await fetchWithRetry(url, 2, 5000, 600000); // 10 min cache
-    
+
     if (Array.isArray(data)) {
       return data.map((item: any) => ({
         time: item[0],
@@ -406,38 +406,56 @@ export async function getCoinGeckoOHLC(coinId: string, interval: string): Promis
 }
 
 export async function getUniversalKlines(symbol: string, interval: string, limit = 100, coinId?: string, currentPrice?: number): Promise<{ data: OHLCData[], source: string }> {
+  const isShortTerm = ['15m', '1h', '4h'].includes(interval);
+
   const validatePrice = (klines: OHLCData[]) => {
     if (!currentPrice || klines.length === 0) return true;
     const lastPrice = klines[klines.length - 1].close;
     const diff = Math.abs(lastPrice - currentPrice) / currentPrice;
-    return diff < 0.2; // Allow 20% difference, otherwise it's likely a different coin
+    return diff < 0.2;
   };
 
-  // 1. Try Binance (Fastest, High Quality OHLCV for all intervals)
-  const binance = await getBinanceKlines(symbol, interval, limit);
-  if (binance.length > 0 && validatePrice(binance)) return { data: binance, source: 'Binance' };
+  if (isShortTerm) {
+    // 병렬로 동시 호출
+    const [binance, bybit, okx] = await Promise.allSettled([
+      getBinanceKlines(symbol, interval, limit),
+      getBybitKlines(symbol, interval, limit),
+      getOKXKlines(symbol, interval, limit),
+    ]);
 
-  // 2. Try Bybit (High Quality OHLCV)
-  const bybit = await getBybitKlines(symbol, interval, limit);
-  if (bybit.length > 0 && validatePrice(bybit)) return { data: bybit, source: 'Bybit' };
+    const results = [
+      { result: binance, source: 'Binance (Fast)' },
+      { result: bybit, source: 'Bybit' },
+      { result: okx, source: 'OKX' },
+    ];
 
-  // 3. Try OKX
-  const okx = await getOKXKlines(symbol, interval, limit);
-  if (okx.length > 0 && validatePrice(okx)) return { data: okx, source: 'OKX' };
+    for (const { result, source } of results) {
+      if (result.status === 'fulfilled' && result.value.length > 0 && validatePrice(result.value)) {
+        return { data: result.value, source };
+      }
+    }
+  }
 
-  // 4. Try Top Domestic Exchanges
-  const upbit = await getUpbitKlines(symbol, interval, limit);
-  if (upbit.length > 0 && validatePrice(upbit)) return { data: upbit, source: 'Upbit' };
+  if (coinId) {
+    const cgData = await getCoinGeckoOHLC(coinId, interval);
+    if (cgData.length > 0) return { data: cgData, source: 'CoinGecko (Base)' };
+  }
 
-  const bithumb = await getBithumbKlines(symbol, interval, limit);
-  if (bithumb.length > 0 && validatePrice(bithumb)) return { data: bithumb, source: 'Bithumb' };
+  const [binance, okx, upbit] = await Promise.allSettled([
+    getBinanceKlines(symbol, interval, limit),
+    getOKXKlines(symbol, interval, limit),
+    getUpbitKlines(symbol, interval, limit),
+  ]);
 
-  const coinbase = await getCoinbaseKlines(symbol, interval, limit);
-  if (coinbase.length > 0 && validatePrice(coinbase)) return { data: coinbase, source: 'Coinbase' };
+  if (binance.status === 'fulfilled' && binance.value.length > 0 && validatePrice(binance.value))
+    return { data: binance.value, source: 'Binance' };
+  if (okx.status === 'fulfilled' && okx.value.length > 0 && validatePrice(okx.value))
+    return { data: okx.value, source: 'OKX' };
+  if (upbit.status === 'fulfilled' && upbit.value.length > 0 && validatePrice(upbit.value))
+    return { data: upbit.value, source: 'Upbit' };
 
   return { data: [], source: 'None' };
 }
-
 export async function searchCoins(query: string) {
   // Search endpoint, cache for 5 minutes
   return fetchWithRetry(`${COINGECKO_BASE}/search?query=${query}`, 5, 3000, 300000);
@@ -451,14 +469,14 @@ export async function getTopExchanges(limit = 5): Promise<GlobalExchange[]> {
 export async function getDerivativesData(symbol: string): Promise<DerivativesData | null> {
   const baseSymbol = BINANCE_SYMBOL_MAP[symbol.toLowerCase()] || symbol.toUpperCase();
   const binanceSymbol = baseSymbol.endsWith('USDT') ? baseSymbol : `${baseSymbol}USDT`;
-  
+
   try {
     // 1. Funding Rate
     const fundingRes = await fetchWithRetry(`${BINANCE_FUTURES_BASE}/premiumIndex?symbol=${binanceSymbol}`, 1, 500, 30000, true).catch(() => null);
-    
+
     // 2. Long/Short Ratio (Global)
     const lsRes = await fetchWithRetry(`https://fapi.binance.com/futures/data/globalLongShortAccountRatio?symbol=${binanceSymbol}&period=1h&limit=1`, 1, 500, 30000, true).catch(() => null);
-    
+
     // 3. Open Interest
     const oiRes = await fetchWithRetry(`${BINANCE_FUTURES_BASE}/openInterest?symbol=${binanceSymbol}`, 1, 500, 30000, true).catch(() => null);
 
@@ -480,17 +498,17 @@ export async function getDerivativesData(symbol: string): Promise<DerivativesDat
 export async function getOkxDerivativesData(symbol: string): Promise<DerivativesData | null> {
   const baseSymbol = symbol.toUpperCase();
   const okxSymbol = `${baseSymbol}-USDT-SWAP`;
-  
+
   try {
     // OKX API often has CORS issues in browser for some endpoints.
     // We try to fetch but handle failure gracefully.
-    
+
     // 1. Funding Rate
     const fundingRes = await fetchWithRetry(`${OKX_BASE}/public/funding-rate?instId=${okxSymbol}`, 1, 500, 30000, true).catch(() => null);
-    
+
     // 2. Long/Short Ratio (Account)
     const lsRes = await fetchWithRetry(`${OKX_BASE}/rubik/stat/contracts/long-short-account-ratio?instId=${baseSymbol}-USDT&period=1H`, 1, 500, 30000, true).catch(() => null);
-    
+
     // 3. Open Interest
     const oiRes = await fetchWithRetry(`${OKX_BASE}/public/open-interest?instId=${okxSymbol}`, 1, 500, 30000, true).catch(() => null);
 
@@ -513,14 +531,14 @@ export async function getBybitDerivativesData(symbol: string): Promise<Derivativ
   const lowerSymbol = symbol.toLowerCase();
   const baseSymbol = BINANCE_SYMBOL_MAP[lowerSymbol] || symbol.toUpperCase();
   const bybitSymbol = baseSymbol.endsWith('USDT') ? baseSymbol : `${baseSymbol}USDT`;
-  
+
   try {
     // 1. Funding Rate & Ticker info
     const tickerRes = await fetchWithRetry(`${BYBIT_BASE}/market/tickers?category=linear&symbol=${bybitSymbol}`, 1, 500, 30000, true).catch(() => null);
-    
+
     // 2. Long/Short Ratio (Account)
     const lsRes = await fetchWithRetry(`${BYBIT_BASE}/market/account-ratio?category=linear&symbol=${bybitSymbol}&period=1h`, 1, 500, 30000, true).catch(() => null);
-    
+
     // 3. Open Interest
     const oiRes = await fetchWithRetry(`${BYBIT_BASE}/market/open-interest?category=linear&symbol=${bybitSymbol}&intervalTime=1h`, 1, 500, 30000, true).catch(() => null);
 
@@ -545,7 +563,7 @@ export async function getBybitDerivativesData(symbol: string): Promise<Derivativ
         timestamp: Date.now()
       };
     }
-  } catch (e) {}
+  } catch (e) { }
   return null;
 }
 
@@ -556,7 +574,7 @@ export async function getMarketLiquidityData(): Promise<MarketLiquidity | null> 
       const { total_market_cap, total_volume, market_cap_percentage, active_cryptocurrencies } = global.data;
       const totalCap = total_market_cap.usd;
       const totalVol = total_volume.usd;
-      
+
       return {
         total_market_cap: totalCap,
         total_volume: totalVol,
@@ -565,7 +583,7 @@ export async function getMarketLiquidityData(): Promise<MarketLiquidity | null> 
         active_cryptocurrencies
       };
     }
-  } catch (e) {}
+  } catch (e) { }
   return null;
 }
 
